@@ -4,4 +4,4 @@
         "@next/next/no-img-element": "warn",
         "react-hooks/exhaustive-deps": "warn"
   }
-  }
+}
