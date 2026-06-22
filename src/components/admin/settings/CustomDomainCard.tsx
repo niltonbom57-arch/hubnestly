@@ -10,10 +10,9 @@ import { Globe, Copy, Check, ExternalLink, AlertCircle, Loader2 } from 'lucide-r
 interface Props {
   tenantSlug: string
   currentDomain: string | null
-  currentSubdomain: string | null
-}
+}  
 
-export function CustomDomainCard({ tenantSlug, currentDomain, currentSubdomain }: Props) {
+export function CustomDomainCard({ tenantSlug, currentDomain }: Props) {
   const [domain,    setDomain]    = useState(currentDomain    ?? '')
   const [saving,    setSaving]    = useState(false)
   const [copied,    setCopied]    = useState(false)
