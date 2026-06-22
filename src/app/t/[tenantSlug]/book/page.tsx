@@ -197,7 +197,6 @@ export default function PublicBookPage() {
 
   const primaryColor = config?.branding.primaryColor ?? '#0d9488'
   const step1Done = rooms.bedrooms >= 1 && rooms.bathrooms >= 1
-  const step2Done = true // frequency always selected
   const step3Valid = name.trim().length >= 2 && email.includes('@') && phone.length >= 10
 
   // ── Labels (bilingual) ──────────────────────────────────────────────────
