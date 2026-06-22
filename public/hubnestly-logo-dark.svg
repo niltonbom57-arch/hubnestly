@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 90" width="500" height="90">
+  <defs>
+
+    <linearGradient id="midArcD" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%"   stop-color="#4ACA6A"/>
+      <stop offset="100%" stop-color="#F08098"/>
+    </linearGradient>
+
+    <linearGradient id="sepD" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%"   stop-color="#4ACA6A" stop-opacity="0.85"/>
+      <stop offset="42%"  stop-color="#D06080" stop-opacity="0.50"/>
+      <stop offset="100%" stop-color="#F08098" stop-opacity="0"/>
+    </linearGradient>
+
+  </defs>
+
+  <!-- Dark pill background -->
+  <rect x="0" y="0" width="500" height="90" rx="18" fill="#060C08"/>
+  <rect x="0" y="0" width="500" height="90" rx="18"
+    fill="none" stroke="#2A5A34" stroke-width="0.8" opacity="0.22"/>
+
+  <!-- ── MARK — three nest arcs, bowl opens upward, centred at 56,56 ── -->
+
+  <!-- Outer arc — bright forest -->
+  <path d="M 8,56 A 48,48 0 0,1 104,56"
+    fill="none" stroke="#3AB85A" stroke-width="8" stroke-linecap="round"/>
+
+  <!-- Middle arc — gradient -->
+  <path d="M 22,56 A 34,34 0 0,1 90,56"
+    fill="none" stroke="url(#midArcD)" stroke-width="6.5" stroke-linecap="round"/>
+
+  <!-- Inner arc — rose -->
+  <path d="M 38,56 A 18,18 0 0,1 74,56"
+    fill="none" stroke="#F08098" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- Hub dot -->
+  <circle cx="56" cy="56" r="5.5" fill="#FAF5F0"/>
+  <circle cx="56" cy="56" r="2.2" fill="#060C08"/>
+
+  <!-- ── WORDMARK — equal weight 600, split color ── -->
+  <text font-family="'Helvetica Neue', Arial, sans-serif"
+        font-size="44" font-weight="600" letter-spacing="-1.2">
+    <tspan x="120" y="62" fill="#4ACA6A">Hub</tspan><tspan fill="#F08098" letter-spacing="-0.6">Nestly</tspan>
+  </text>
+
+  <!-- Separator -->
+  <rect x="120" y="70" width="370" height="0.8" rx="0.4" fill="url(#sepD)"/>
+
+</svg>

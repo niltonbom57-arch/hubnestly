@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "nestly",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000
+    },
+    {
+      "name": "brand-preview",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "public", "-p", "4444", "--no-clipboard"],
+      "port": 4444
+    }
+  ]
+}

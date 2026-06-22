@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>HubNestly — Brand Identity 2026</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      background: #F0F5F1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-bottom: 80px;
+    }
+
+    header {
+      padding: 60px 0 16px;
+      text-align: center;
+    }
+    header h1 {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 8px;
+      text-transform: uppercase;
+      color: #1A6030;
+      opacity: 0.55;
+    }
+    header p {
+      font-size: 9px;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: #C84068;
+      opacity: 0.40;
+      margin-top: 8px;
+    }
+
+    .stack {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      width: 100%;
+      max-width: 660px;
+      padding: 36px 20px 0;
+    }
+
+    .card {
+      border-radius: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      padding: 48px 44px;
+    }
+
+    .on-white  { background: #FFFFFF;                box-shadow: 0 2px 40px rgba(26,96,48,0.07); }
+    .on-dark   { background: #060C08;                box-shadow: 0 6px 56px rgba(74,202,106,0.13); }
+    .on-cream  { background: #F8F4F0;                box-shadow: 0 2px 28px rgba(26,96,48,0.05); }
+    .on-blush  { background: linear-gradient(135deg, #EDF7EF 0%, #FAF0F4 100%);
+                                                     box-shadow: 0 2px 28px rgba(26,96,48,0.05); }
+
+    .lbl {
+      font-size: 9.5px;
+      font-weight: 600;
+      letter-spacing: 5px;
+      text-transform: uppercase;
+      opacity: 0.30;
+    }
+    .on-white .lbl, .on-cream .lbl, .on-blush .lbl { color: #1A4A28; }
+    .on-dark  .lbl { color: #4ACA6A; }
+
+    /* Mark sizes row */
+    .icon-row {
+      display: flex;
+      align-items: flex-end;
+      gap: 28px;
+      padding-top: 4px;
+    }
+    .icon-col { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+    .icon-label {
+      font-size: 8.5px;
+      letter-spacing: 1.5px;
+      color: #1A4A28;
+      opacity: 0.30;
+    }
+
+    /* Palette */
+    .pal-row {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .sw-g { display: flex; flex-direction: column; align-items: center; gap: 9px; }
+    .sw {
+      width: 42px; height: 42px;
+      border-radius: 50%;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.10);
+    }
+    .sw-n { font-size: 9.5px; font-weight: 600; color: #1A2A1E; opacity: 0.60; }
+    .sw-h { font-size: 8.5px;  color: #3A7A4A; opacity: 0.38; }
+
+    /* Divider label */
+    .section-label {
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 5px;
+      text-transform: uppercase;
+      color: #1A4A28;
+      opacity: 0.25;
+      width: 100%;
+      text-align: center;
+      padding: 8px 0 0;
+    }
+
+    footer {
+      margin-top: 40px;
+      font-size: 9px;
+      letter-spacing: 5px;
+      text-transform: uppercase;
+      color: #2A7A44;
+      opacity: 0.20;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>HubNestly · Brand Identity</h1>
+  <p>Verdant Warmth · Forest × Rose · 2026</p>
+</header>
+
+<div class="stack">
+
+  <!-- 1. Primary on white -->
+  <div class="card on-white">
+    <span class="lbl">Primary Lockup</span>
+    <img src="./hubnestly-logo.svg" width="440" alt="HubNestly"/>
+  </div>
+
+  <!-- 2. Dark mode pill -->
+  <div class="card on-dark">
+    <span class="lbl">Dark Mode</span>
+    <img src="./hubnestly-logo-dark.svg" width="440" alt="HubNestly Dark"/>
+  </div>
+
+  <!-- 3. Gradient / blush -->
+  <div class="card on-blush">
+    <span class="lbl">Gradient Background</span>
+    <img src="./hubnestly-logo.svg" width="400" alt="HubNestly Blush"/>
+  </div>
+
+  <!-- 4. Cream / print -->
+  <div class="card on-cream">
+    <span class="lbl">Paper · Print</span>
+    <img src="./hubnestly-logo.svg" width="400" alt="HubNestly Cream"/>
+  </div>
+
+  <!-- 5. Standalone mark at scale -->
+  <div class="card on-white" style="padding:36px 44px">
+    <span class="lbl">Standalone Mark · Scale Test</span>
+    <div class="icon-row">
+      <div class="icon-col">
+        <img src="./hubnestly-icon.svg" width="96" height="96"/>
+        <div class="icon-label">96 px</div>
+      </div>
+      <div class="icon-col">
+        <img src="./hubnestly-icon.svg" width="64" height="64"/>
+        <div class="icon-label">64 px</div>
+      </div>
+      <div class="icon-col">
+        <img src="./hubnestly-icon.svg" width="48" height="48"/>
+        <div class="icon-label">48 px</div>
+      </div>
+      <div class="icon-col">
+        <img src="./hubnestly-icon.svg" width="32" height="32"/>
+        <div class="icon-label">32 px</div>
+      </div>
+      <div class="icon-col">
+        <img src="./hubnestly-icon.svg" width="20" height="20"/>
+        <div class="icon-label">20 px</div>
+      </div>
+      <div class="icon-col">
+        <img src="./hubnestly-icon.svg" width="16" height="16"/>
+        <div class="icon-label">16 px</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. Bare mark (no bg square) -->
+  <div class="card on-white" style="padding:36px 44px; gap:14px;">
+    <span class="lbl">Mark Only · No Background</span>
+    <div class="icon-row">
+      <div class="icon-col">
+        <img src="./hubnestly-mark.svg" width="96" height="60"/>
+        <div class="icon-label">lg</div>
+      </div>
+      <div class="icon-col">
+        <img src="./hubnestly-mark.svg" width="64" height="40"/>
+        <div class="icon-label">md</div>
+      </div>
+      <div class="icon-col">
+        <img src="./hubnestly-mark.svg" width="48" height="30"/>
+        <div class="icon-label">sm</div>
+      </div>
+      <div class="icon-col">
+        <img src="./hubnestly-mark.svg" width="32" height="20"/>
+        <div class="icon-label">xs</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. Color System -->
+  <div class="card on-white" style="gap:24px;">
+    <span class="lbl">Color System</span>
+
+    <div class="pal-row">
+      <div class="sw-g">
+        <div class="sw" style="background:linear-gradient(135deg,#061208,#0E2A1A)"></div>
+        <div class="sw-n">Night</div>
+        <div class="sw-h">#0E2A1A</div>
+      </div>
+      <div class="sw-g">
+        <div class="sw" style="background:linear-gradient(135deg,#0F3320,#1A6335)"></div>
+        <div class="sw-n">Forest</div>
+        <div class="sw-h">#0F3320</div>
+      </div>
+      <div class="sw-g">
+        <div class="sw" style="background:#2E8A50"></div>
+        <div class="sw-n">Verdant</div>
+        <div class="sw-h">#2E8A50</div>
+      </div>
+      <div class="sw-g">
+        <div class="sw" style="background:linear-gradient(135deg,#D03258,#A0204A)"></div>
+        <div class="sw-n">Rose</div>
+        <div class="sw-h">#D03258</div>
+      </div>
+      <div class="sw-g">
+        <div class="sw" style="background:#F0A0B4; border:1px solid #E08898"></div>
+        <div class="sw-n">Blush</div>
+        <div class="sw-h">#F0A0B4</div>
+      </div>
+      <div class="sw-g">
+        <div class="sw" style="background:#FAF5F0; border:1px solid #E0D8D0"></div>
+        <div class="sw-n">Cream</div>
+        <div class="sw-h">#FAF5F0</div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<footer>HubNestly · 2026</footer>
+
+</body>
+</html>

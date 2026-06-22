@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160">
+  <defs>
+
+    <linearGradient id="iconBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#0E2A1A"/>
+      <stop offset="100%" stop-color="#061208"/>
+    </linearGradient>
+
+    <!-- Middle arc gradient: forest → rose -->
+    <linearGradient id="midArcI" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%"   stop-color="#267A45"/>
+      <stop offset="100%" stop-color="#C04068"/>
+    </linearGradient>
+
+  </defs>
+
+  <!-- Rounded square -->
+  <rect x="0" y="0" width="160" height="160" rx="38"
+    fill="url(#iconBg)"/>
+  <rect x="0" y="0" width="160" height="160" rx="38"
+    fill="none" stroke="#2A7A44" stroke-width="1.2" opacity="0.18"/>
+
+  <!-- Three nest arcs — bowl opens upward, centred at 80,94 -->
+
+  <!-- Outer arc — bright forest -->
+  <path d="M 18,94 A 62,62 0 0,1 142,94"
+    fill="none" stroke="#267A45" stroke-width="11" stroke-linecap="round"/>
+
+  <!-- Middle arc — gradient forest→rose -->
+  <path d="M 36,94 A 44,44 0 0,1 124,94"
+    fill="none" stroke="url(#midArcI)" stroke-width="9" stroke-linecap="round"/>
+
+  <!-- Inner arc — rose -->
+  <path d="M 56,94 A 24,24 0 0,1 104,94"
+    fill="none" stroke="#D03258" stroke-width="7" stroke-linecap="round"/>
+
+  <!-- Hub dot -->
+  <circle cx="80" cy="94" r="8"   fill="#FAF5F0"/>
+  <circle cx="80" cy="94" r="3.5" fill="#0A1A0E"/>
+
+</svg>
