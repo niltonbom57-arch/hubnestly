@@ -227,7 +227,7 @@ function HoldCaptureToggle() {
           </div>
           <p className="text-xs text-slate-500 mt-1 leading-relaxed">
             Reserva o valor no cartão do cliente <strong>48h antes</strong> da limpeza e cobra somente após a conclusão.
-            Prática padrão no mercado americano — elimina estornos por "no-show".
+                        Prática padrão no mercado americano – elimina estornos por &quot;no-show&quot;.
           </p>
         </div>
       </div>
