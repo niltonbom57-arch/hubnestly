@@ -143,53 +143,77 @@ export const authOptions: NextAuthOptions = {
       }
     },
 
-    async jwt({ token, user }) {
-      if (user) {
-        token.sub            = (user as { id: string }).id
-        token.id             = (user as { id: string }).id
-        token.role           = (user as { role?: Role }).role            ?? Role.CLIENT
-        token.tenantId       = (user as { tenantId?: string }).tenantId  ?? ''
-        token.tenantSlug     = (user as { tenantSlug?: string }).tenantSlug ?? ''
-        token.isPlatformAdmin = (user as { isPlatformAdmin?: boolean }).isPlatformAdmin ?? false
+    async jwt({ token, user, trigger }) {
+      // Na primeira geração do token (login), sempre busca dados frescos do banco
+      if (user || trigger === 'signIn') {
+        const userId = (user as { id?: string })?.id ?? token.sub
+        if (userId) {
+          try {
+            const dbUser = await prisma.user.findUnique({
+              where:  { id: userId },
+              select: {
+                id:              true,
+                role:            true,
+                tenantId:        true,
+                isPlatformAdmin: true,
+                tenant:          { select: { slug: true } },
+              },
+            })
+            if (dbUser) {
+              token.id             = dbUser.id
+              token.sub            = dbUser.id
+              token.role           = dbUser.role
+              token.tenantId       = dbUser.tenantId
+              token.tenantSlug     = dbUser.tenant?.slug ?? ''
+              token.isPlatformAdmin = dbUser.isPlatformAdmin
+              return token
+            }
+          } catch {
+            // silencioso
+          }
+        }
+
+        // Fallback: usa dados do objeto user se DB falhar
+        if (user) {
+          token.sub             = (user as { id: string }).id
+          token.id              = (user as { id: string }).id
+          token.role            = (user as { role?: Role }).role             ?? Role.CLIENT
+          token.tenantId        = (user as { tenantId?: string }).tenantId   ?? ''
+          token.tenantSlug      = (user as { tenantSlug?: string }).tenantSlug ?? ''
+          token.isPlatformAdmin = (user as { isPlatformAdmin?: boolean }).isPlatformAdmin ?? false
+        }
       }
 
-      // Refresh se o token não tem role ou tenantId (ex: login via Google)
-      if ((!token.role || !token.tenantId) && token.email) {
+      // Para login via Google (sem id no objeto user), busca pelo email
+      if (!token.id && token.email) {
         try {
           const tenant = await prisma.tenant.findFirst({
             where:   { status: { in: ['ACTIVE', 'TRIAL'] } },
             select:  { id: true },
             orderBy: { createdAt: 'asc' },
           })
-          const dbUser = tenant ? await prisma.user.findUnique({
-            where:  { tenantId_email: { tenantId: tenant.id, email: token.email } },
-            select: {
-              id:              true,
-              role:            true,
-              tenantId:        true,
-              isPlatformAdmin: true,
-              tenant:          { select: { slug: true } },
-            },
-          }) : await prisma.user.findUnique({
-            where:  { id: token.sub },
-            select: {
-              id:              true,
-              role:            true,
-              tenantId:        true,
-              isPlatformAdmin: true,
-              tenant:          { select: { slug: true } },
-            },
-          })
-          if (dbUser) {
-            token.id             = dbUser.id
-            token.sub            = dbUser.id
-            token.role           = dbUser.role
-            token.tenantId       = dbUser.tenantId
-            token.tenantSlug     = dbUser.tenant?.slug ?? ''
-            token.isPlatformAdmin = dbUser.isPlatformAdmin
+          if (tenant) {
+            const dbUser = await prisma.user.findUnique({
+              where:  { tenantId_email: { tenantId: tenant.id, email: token.email } },
+              select: {
+                id:              true,
+                role:            true,
+                tenantId:        true,
+                isPlatformAdmin: true,
+                tenant:          { select: { slug: true } },
+              },
+            })
+            if (dbUser) {
+              token.id             = dbUser.id
+              token.sub            = dbUser.id
+              token.role           = dbUser.role
+              token.tenantId       = dbUser.tenantId
+              token.tenantSlug     = dbUser.tenant?.slug ?? ''
+              token.isPlatformAdmin = dbUser.isPlatformAdmin
+            }
           }
         } catch {
-          // silencioso — não quebra o login
+          // silencioso
         }
       }
 
