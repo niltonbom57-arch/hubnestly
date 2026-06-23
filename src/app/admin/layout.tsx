@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { auth } from '@/lib/auth/session'
 import { redirect } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { LayoutDashboard, Calendar, Users, DollarSign, LogOut, Users2, Settings, Send, Globe } from 'lucide-react'
+import { LayoutDashboard, Calendar, Users, DollarSign, LogOut, Users2, Settings, Send, Globe, ShieldCheck } from 'lucide-react'
 import { NotificationBell } from '@/components/admin/notification-bell'
 import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher'
 import { HubNestlyLogo as GleamLogo } from '@/components/ui/HubNestlyLogo'
@@ -47,7 +47,17 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <p className="text-xs text-slate-500 uppercase tracking-widest px-3 font-semibold">Sistema</p>
           </div>
           <AdminNavItem href="/admin/settings" icon={<Settings className="w-4 h-4" />} label="Configurações" />
-          <AdminNavItem href="/admin/tenants" icon={<Globe className="w-4 h-4" />} label="Empresas" />
+          <AdminNavItem href="/admin/tenants"  icon={<Globe className="w-4 h-4" />}    label="Empresas" />
+
+          <div className="pt-4 pb-1">
+            <p className="text-xs text-slate-500 uppercase tracking-widest px-3 font-semibold">Plataforma</p>
+          </div>
+          <AdminNavItem
+            href="/admin/master"
+            icon={<ShieldCheck className="w-4 h-4" />}
+            label="Master Dashboard"
+            highlight
+          />
         </nav>
 
         {/* User + Logout */}
@@ -90,12 +100,21 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   )
 }
 
-function AdminNavItem({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) {
+function AdminNavItem({ href, icon, label, highlight }: {
+  href: string
+  icon: React.ReactNode
+  label: string
+  highlight?: boolean
+}) {
   return (
     <Button
       variant="ghost"
       size="sm"
-      className="w-full justify-start gap-3 text-slate-300 hover:text-white hover:bg-slate-700/60 rounded-xl h-9 font-medium"
+      className={`w-full justify-start gap-3 rounded-xl h-9 font-medium ${
+        highlight
+          ? 'text-[#4ACA6A] hover:text-white hover:bg-gradient-to-r hover:from-[#1A6335]/40 hover:to-[#D03258]/20 border border-[#1A6335]/30'
+          : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
+      }`}
       asChild
     >
       <Link href={href}>{icon}{label}</Link>
