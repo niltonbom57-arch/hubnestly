@@ -25,15 +25,23 @@ export default withAuth(
     type Token = { role?: string; tenantSlug?: string; isPlatformAdmin?: boolean }
     const t = token as Token | undefined
 
+    // ── /master → exige isPlatformAdmin ──────────────────────────────────
+    if (pathname.startsWith('/master')) {
+      if (!token || !t?.isPlatformAdmin) {
+        return NextResponse.redirect(new URL('/auth/login', req.url))
+      }
+      return NextResponse.next()
+    }
+
     // ── Redireciona automaticamente conforme perfil ────────────────────────
+    // Platform admin tentando acessar /dashboard → manda para /master
+    if (pathname === '/dashboard' && t?.isPlatformAdmin) {
+      return NextResponse.redirect(new URL('/master', req.url))
+    }
+
     // Admin de empresa tentando acessar /dashboard → redireciona para o painel da empresa
     if (pathname === '/dashboard' && t?.role === 'ADMIN' && t?.tenantSlug && !t?.isPlatformAdmin) {
       return NextResponse.redirect(new URL(`/t/${t.tenantSlug}/admin`, req.url))
-    }
-
-    // Admin da plataforma tentando acessar /dashboard → redireciona para /admin
-    if (pathname === '/dashboard' && t?.isPlatformAdmin) {
-      return NextResponse.redirect(new URL('/admin', req.url))
     }
 
     // Super-admin: exige isPlatformAdmin (guardado no token)
@@ -57,7 +65,7 @@ export default withAuth(
       }
     }
 
-    // Rota /admin (plataforma) → somente platform admin
+    // Rota /admin (plataforma legada) → somente platform admin
     if (pathname.startsWith('/admin') && !t?.isPlatformAdmin) {
       return NextResponse.redirect(new URL('/', req.url))
     }
@@ -77,6 +85,10 @@ export default withAuth(
       authorized({ req, token }) {
         const { pathname } = req.nextUrl
         if (isPublicPath(pathname)) return true
+
+        // /master exige token (verificação de isPlatformAdmin feita no middleware acima)
+        if (pathname.startsWith('/master')) return !!token
+
         // Qualquer rota sob /t/[slug]/dashboard ou /admin exige login
         if (pathname.match(/^\/t\/[^/]+\/(dashboard|admin|booking|properties|profile)/)) {
           return !!token
