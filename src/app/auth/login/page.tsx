@@ -2,7 +2,7 @@
 
 import { Suspense, useState } from 'react'
 import { signIn } from 'next-auth/react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -37,7 +37,6 @@ function getDemoAccounts() {
 }
 
 function LoginForm() {
-  const router       = useRouter()
   const searchParams = useSearchParams()
   const [loading, setLoading]           = useState(false)
   const [showPassword, setShowPassword] = useState(false)
@@ -79,21 +78,9 @@ function LoginForm() {
       setLoginOk(true)
       toast.success('Login realizado! Redirecionando...')
 
-      // Aguarda cookie ser gravado antes de ler a sessão
-      await new Promise((r) => setTimeout(r, 800))
-
-      // Usa rota própria para evitar problema de timing do getSession()
-      const meRes  = await fetch('/api/auth/me', { cache: 'no-store' })
-      const meData = meRes.ok ? (await meRes.json() as { isPlatformAdmin?: boolean; role?: string; tenantSlug?: string }) : {}
-
-      if (meData.isPlatformAdmin) {
-        router.push('/master')
-      } else if (meData.role === 'ADMIN' && meData.tenantSlug) {
-        router.push(`/t/${meData.tenantSlug}/admin`)
-      } else {
-        router.push(callbackUrl !== '/dashboard' ? callbackUrl : '/dashboard')
-      }
-      router.refresh()
+      // Deixa o servidor decidir o redirect com base na sessão real
+      await new Promise((r) => setTimeout(r, 500))
+      window.location.href = '/api/auth/redirect'
     } catch {
       setErrorMsg('Erro de conexão. Verifique sua internet e tente novamente.')
     } finally {
