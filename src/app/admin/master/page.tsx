@@ -4,11 +4,10 @@ import { prisma } from '@/lib/db/prisma'
 import { requireAuth } from '@/lib/auth/require-auth'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Badge } from '@/components/ui/badge'
 import {
-  Building2, Users, DollarSign, Calendar, TrendingUp,
-  CheckCircle2, Clock, AlertTriangle, ArrowRight,
-  Activity, Globe, CreditCard, Star
+  Building2, Users, DollarSign, Calendar,
+  Clock, AlertTriangle,
+  Activity, Globe, Star
 } from 'lucide-react'
 
 export default async function MasterDashboardPage() {
@@ -219,7 +218,7 @@ export default async function MasterDashboardPage() {
             ) : (
               tenants.map((t) => {
                 const st = tenantStatusMap[t.status] ?? { label: t.status, color: 'bg-slate-100 text-slate-500' }
-                const revenue = 0 // simplificado
+
                 return (
                   <div key={t.id} className="px-4 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors">
                     <div className="flex items-center gap-3 min-w-0">
