@@ -1,6 +1,5 @@
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
 
 export interface BookingConfirmedEmailData {
   adminEmail: string
@@ -19,6 +18,7 @@ export async function sendBookingConfirmedEmail(data: BookingConfirmedEmailData)
     return
   }
 
+    const resend = new Resend(process.env.RESEND_API_KEY)
   const dateStr = data.scheduledAt.toLocaleString('pt-BR', {
     timeZone: 'America/New_York',
     weekday: 'long',
