@@ -86,7 +86,7 @@ function LoginForm() {
 
       if (user?.isPlatformAdmin) {
         // Dono da plataforma → master dashboard
-        router.push('/admin/master')
+        router.push('/master')
       } else if (user?.role === 'ADMIN' && user?.tenantSlug) {
         // Admin de empresa → painel da empresa
         router.push(`/t/${user.tenantSlug}/admin`)
