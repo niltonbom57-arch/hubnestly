@@ -79,19 +79,18 @@ function LoginForm() {
       setLoginOk(true)
       toast.success('Login realizado! Redirecionando...')
 
-      // Obtém sessão atualizada para saber role e tenantSlug
-      const { getSession } = await import('next-auth/react')
-      const session = await getSession()
-      const user = session?.user as { role?: string; tenantSlug?: string; isPlatformAdmin?: boolean } | undefined
+      // Aguarda cookie ser gravado antes de ler a sessão
+      await new Promise((r) => setTimeout(r, 800))
 
-      if (user?.isPlatformAdmin) {
-        // Dono da plataforma → master dashboard
+      // Usa rota própria para evitar problema de timing do getSession()
+      const meRes  = await fetch('/api/auth/me', { cache: 'no-store' })
+      const meData = meRes.ok ? (await meRes.json() as { isPlatformAdmin?: boolean; role?: string; tenantSlug?: string }) : {}
+
+      if (meData.isPlatformAdmin) {
         router.push('/master')
-      } else if (user?.role === 'ADMIN' && user?.tenantSlug) {
-        // Admin de empresa → painel da empresa
-        router.push(`/t/${user.tenantSlug}/admin`)
+      } else if (meData.role === 'ADMIN' && meData.tenantSlug) {
+        router.push(`/t/${meData.tenantSlug}/admin`)
       } else {
-        // Cliente → dashboard pessoal
         router.push(callbackUrl !== '/dashboard' ? callbackUrl : '/dashboard')
       }
       router.refresh()
