@@ -85,8 +85,8 @@ function LoginForm() {
       const user = session?.user as { role?: string; tenantSlug?: string; isPlatformAdmin?: boolean } | undefined
 
       if (user?.isPlatformAdmin) {
-        // Dono da plataforma → painel global
-        router.push('/admin')
+        // Dono da plataforma → master dashboard
+        router.push('/admin/master')
       } else if (user?.role === 'ADMIN' && user?.tenantSlug) {
         // Admin de empresa → painel da empresa
         router.push(`/t/${user.tenantSlug}/admin`)
