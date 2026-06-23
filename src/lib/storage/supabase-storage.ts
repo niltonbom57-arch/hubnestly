@@ -1,9 +1,11 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl    = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+function getSupabase() {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    return createClient(url, key)
+}
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 const BUCKET = 'tenant-assets'
 
@@ -12,7 +14,7 @@ export async function uploadLogo(tenantId: string, file: File): Promise<string> 
   const path     = `${tenantId}/logo-${Date.now()}.${ext}`
   const buffer   = Buffer.from(await file.arrayBuffer())
 
-  const { error } = await supabase.storage
+    const { error } = await getSupabase().storage
     .from(BUCKET)
     .upload(path, buffer, {
       contentType: file.type,
@@ -21,7 +23,7 @@ export async function uploadLogo(tenantId: string, file: File): Promise<string> 
 
   if (error) throw new Error(`Upload falhou: ${error.message}`)
 
-  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path)
+    const { data } = getSupabase().storage.from(BUCKET).getPublicUrl(path)
   return data.publicUrl
 }
 
@@ -30,7 +32,7 @@ export async function uploadFavicon(tenantId: string, file: File): Promise<strin
   const path   = `${tenantId}/favicon-${Date.now()}.${ext}`
   const buffer = Buffer.from(await file.arrayBuffer())
 
-  const { error } = await supabase.storage
+    const { error } = await getSupabase().storage
     .from(BUCKET)
     .upload(path, buffer, {
       contentType: file.type,
@@ -39,6 +41,6 @@ export async function uploadFavicon(tenantId: string, file: File): Promise<strin
 
   if (error) throw new Error(`Upload falhou: ${error.message}`)
 
-  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path)
+    const { data } = getSupabase().storage.from(BUCKET).getPublicUrl(path)
   return data.publicUrl
 }
