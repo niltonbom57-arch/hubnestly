@@ -105,8 +105,7 @@ export default async function SettingsPage({ params }: Props) {
           <CustomDomainCard
             tenantSlug={params.tenantSlug}
             currentDomain={tenant.customDomain ?? null}
-            currentSubdomain={tenant.subdomain ?? null}
-          />
+      />
         </TabsContent>
       </Tabs>
     </div>
