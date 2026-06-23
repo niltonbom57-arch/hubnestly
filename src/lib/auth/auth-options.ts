@@ -1,5 +1,6 @@
 import { NextAuthOptions } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
+import GoogleProvider from 'next-auth/providers/google'
 import { prisma } from '@/lib/db/prisma'
 import { verifyPassword } from './password'
 import { loginSchema } from '@/lib/validation/schemas/auth'
@@ -13,6 +14,15 @@ export const authOptions: NextAuthOptions = {
     error:  '/auth/login',
   },
   providers: [
+    GoogleProvider({
+      clientId:     process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      authorization: {
+        params: {
+          prompt: 'select_account',
+        },
+      },
+    }),
     CredentialsProvider({
       name: 'credentials',
       credentials: {
@@ -100,6 +110,39 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
+    async signIn({ user, account }) {
+      // Só processa login social (Google)
+      if (account?.provider !== 'google') return true
+
+      try {
+        // Busca tenant padrão
+        const tenant = await prisma.tenant.findFirst({
+          where:   { status: { in: ['ACTIVE', 'TRIAL'] } },
+          select:  { id: true, slug: true },
+          orderBy: { createdAt: 'asc' },
+        })
+        if (!tenant) return false
+
+        // Cria ou atualiza usuário
+        await prisma.user.upsert({
+          where:  { tenantId_email: { tenantId: tenant.id, email: user.email! } },
+          update: { name: user.name ?? undefined, image: user.image ?? undefined },
+          create: {
+            email:          user.email!,
+            name:           user.name  ?? 'Usuário',
+            image:          user.image ?? null,
+            role:           Role.CLIENT,
+            tenantId:       tenant.id,
+            isPlatformAdmin: false,
+          },
+        })
+
+        return true
+      } catch {
+        return false
+      }
+    },
+
     async jwt({ token, user }) {
       if (user) {
         token.sub            = (user as { id: string }).id
@@ -110,12 +153,27 @@ export const authOptions: NextAuthOptions = {
         token.isPlatformAdmin = (user as { isPlatformAdmin?: boolean }).isPlatformAdmin ?? false
       }
 
-      // Refresh se o token não tem role (ex: expirou parte dos dados)
-      if (!token.role && token.sub) {
+      // Refresh se o token não tem role ou tenantId (ex: login via Google)
+      if ((!token.role || !token.tenantId) && token.email) {
         try {
-          const dbUser = await prisma.user.findUnique({
+          const tenant = await prisma.tenant.findFirst({
+            where:   { status: { in: ['ACTIVE', 'TRIAL'] } },
+            select:  { id: true },
+            orderBy: { createdAt: 'asc' },
+          })
+          const dbUser = tenant ? await prisma.user.findUnique({
+            where:  { tenantId_email: { tenantId: tenant.id, email: token.email } },
+            select: {
+              id:              true,
+              role:            true,
+              tenantId:        true,
+              isPlatformAdmin: true,
+              tenant:          { select: { slug: true } },
+            },
+          }) : await prisma.user.findUnique({
             where:  { id: token.sub },
             select: {
+              id:              true,
               role:            true,
               tenantId:        true,
               isPlatformAdmin: true,
@@ -123,6 +181,8 @@ export const authOptions: NextAuthOptions = {
             },
           })
           if (dbUser) {
+            token.id             = dbUser.id
+            token.sub            = dbUser.id
             token.role           = dbUser.role
             token.tenantId       = dbUser.tenantId
             token.tenantSlug     = dbUser.tenant?.slug ?? ''
