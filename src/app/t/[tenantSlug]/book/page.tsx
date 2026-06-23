@@ -11,7 +11,7 @@ import { useI18n } from '@/lib/i18n/context'
 import {
   ArrowLeft, ArrowRight, Check, Home, Bath, BedDouble,
   Zap, RefreshCw, CalendarDays, Sparkles, ChevronDown, ChevronUp,
-  Shield, Clock, Phone, Mail, User, Loader2,
+  Shield, Clock, Phone, Mail, User, Loader2, CheckCircle2,
 } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -44,8 +44,16 @@ interface TenantConfig {
   recurringDiscounts: { weekly: number; biweekly: number; monthly: number }
 }
 
-type Frequency = 'once' | 'weekly' | 'biweekly' | 'monthly'
+interface TimeSlot {
+  time: string
+  startUtc: string
+  endUtc: string
+  teamId: string
+}
+
+type Frequency   = 'once' | 'weekly' | 'biweekly' | 'monthly'
 type CleaningType = 'standard' | 'deep'
+type Step        = 1 | 2 | 3 | 4
 
 interface RoomsState {
   bedrooms: number
@@ -63,18 +71,10 @@ interface RoomsState {
 }
 
 const INITIAL_ROOMS: RoomsState = {
-  bedrooms: 3,
-  bathrooms: 2,
-  livingRooms: 1,
-  kitchens: 1,
-  offices: 0,
-  garages: 0,
-  hasLaundry: false,
-  hasPool: false,
-  hasPatio: false,
-  hasBalcony: false,
-  hasBasement: false,
-  hasGym: false,
+  bedrooms: 3, bathrooms: 2, livingRooms: 1, kitchens: 1,
+  offices: 0, garages: 0,
+  hasLaundry: false, hasPool: false, hasPatio: false,
+  hasBalcony: false, hasBasement: false, hasGym: false,
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -102,6 +102,33 @@ function applyDiscount(price: number, pct: number) {
 
 function fmtUSD(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
+}
+
+function estimateDuration(rooms: RoomsState, type: CleaningType): number {
+  return 90 + rooms.bedrooms * 30 + rooms.bathrooms * 20 + (type === 'deep' ? 30 : 0)
+}
+
+// Generate next 30 days (Mon–Sat only, skip today)
+function getSelectableDays(): string[] {
+  const days: string[] = []
+  const d = new Date()
+  d.setDate(d.getDate() + 1) // start tomorrow
+  while (days.length < 30) {
+    const dow = d.getDay()
+    if (dow !== 0) { // skip Sunday
+      const y = d.getFullYear()
+      const m = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      days.push(`${y}-${m}-${day}`)
+    }
+    d.setDate(d.getDate() + 1)
+  }
+  return days
+}
+
+function fmtDayLabel(dateStr: string) {
+  const d = new Date(dateStr + 'T12:00:00')
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
 // ─── Counter component ────────────────────────────────────────────────────────
@@ -141,17 +168,25 @@ export default function PublicBookPage() {
   const { locale } = useI18n()
   const tenantSlug = params.tenantSlug as string
 
-  const [config, setConfig] = useState<TenantConfig | null>(null)
-  const [loadError, setLoadError] = useState(false)
-  const [step, setStep] = useState<1 | 2 | 3>(1)
-  const [rooms, setRooms] = useState<RoomsState>(INITIAL_ROOMS)
+  const [config, setConfig]         = useState<TenantConfig | null>(null)
+  const [loadError, setLoadError]   = useState(false)
+  const [step, setStep]             = useState<Step>(1)
+  const [rooms, setRooms]           = useState<RoomsState>(INITIAL_ROOMS)
   const [cleaningType, setCleaningType] = useState<CleaningType>('standard')
-  const [frequency, setFrequency] = useState<Frequency>('once')
+  const [frequency, setFrequency]   = useState<Frequency>('once')
   const [showExtras, setShowExtras] = useState(false)
-  const [name,  setName]  = useState('')
-  const [email, setEmail] = useState('')
-  const [phone, setPhone] = useState('')
+  const [name,  setName]            = useState('')
+  const [email, setEmail]           = useState('')
+  const [phone, setPhone]           = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [done, setDone]             = useState(false)
+
+  // Step 3 — date/time picker
+  const [selectedDate, setSelectedDate] = useState<string>('')
+  const [slots, setSlots]               = useState<TimeSlot[]>([])
+  const [loadingSlots, setLoadingSlots] = useState(false)
+  const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null)
+  const selectableDays = getSelectableDays()
 
   // ── Load tenant config ──────────────────────────────────────────────────
   useEffect(() => {
@@ -161,171 +196,220 @@ export default function PublicBookPage() {
       .catch(() => setLoadError(true))
   }, [tenantSlug])
 
+  // ── Load slots when date changes ────────────────────────────────────────
+  useEffect(() => {
+    if (!selectedDate) { setSlots([]); return }
+    setLoadingSlots(true)
+    setSelectedSlot(null)
+    const duration = estimateDuration(rooms, cleaningType)
+    fetch(`/api/t/${tenantSlug}/public/availability?date=${selectedDate}&duration=${duration}`)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(data => setSlots(data.slots ?? []))
+      .catch(() => setSlots([]))
+      .finally(() => setLoadingSlots(false))
+  }, [selectedDate, tenantSlug, rooms, cleaningType])
+
   // ── Price calculation ───────────────────────────────────────────────────
-  const basePrice = config ? calcPrice(rooms, config.pricing) : 0
+  const basePrice      = config ? calcPrice(rooms, config.pricing) : 0
   const deepMultiplier = cleaningType === 'deep' ? 1.35 : 1
   const priceAfterType = basePrice * deepMultiplier
-  const discountPct = frequency === 'weekly'   ? (config?.recurringDiscounts.weekly   ?? 10)
-                    : frequency === 'biweekly'  ? (config?.recurringDiscounts.biweekly ?? 8)
-                    : frequency === 'monthly'   ? (config?.recurringDiscounts.monthly  ?? 5)
-                    : 0
-  const finalPrice = discountPct > 0 ? applyDiscount(priceAfterType, discountPct) : priceAfterType
-  const savings    = priceAfterType - finalPrice
+  const discountPct    = frequency === 'weekly'   ? (config?.recurringDiscounts.weekly   ?? 10)
+                       : frequency === 'biweekly'  ? (config?.recurringDiscounts.biweekly ?? 8)
+                       : frequency === 'monthly'   ? (config?.recurringDiscounts.monthly  ?? 5)
+                       : 0
+  const finalPrice  = discountPct > 0 ? applyDiscount(priceAfterType, discountPct) : priceAfterType
+  const savings     = priceAfterType - finalPrice
 
   // ── Room updater ────────────────────────────────────────────────────────
   const setRoom = useCallback((key: keyof RoomsState) => (v: number | boolean) => {
     setRooms(prev => ({ ...prev, [key]: v }))
   }, [])
 
-  // ── Submit: redirect to register with params ────────────────────────────
-  function handleSubmit(e: React.FormEvent) {
+  // ── Submit ──────────────────────────────────────────────────────────────
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!selectedSlot) return
     setSubmitting(true)
-    const query = new URLSearchParams({
-      tenant: tenantSlug,
-      name,
-      email,
-      phone,
-      bedrooms:    String(rooms.bedrooms),
-      bathrooms:   String(rooms.bathrooms),
-      frequency,
-      price:       String(Math.round(finalPrice)),
-      cleanType:   cleaningType,
-    })
-    router.push(`/auth/register/cliente?${query}`)
+    try {
+      const res = await fetch(`/api/t/${tenantSlug}/public/book`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name, email, phone,
+          bedrooms:    rooms.bedrooms,
+          bathrooms:   rooms.bathrooms,
+          livingRooms: rooms.livingRooms,
+          kitchens:    rooms.kitchens,
+          offices:     rooms.offices,
+          garages:     rooms.garages,
+          hasLaundry:  rooms.hasLaundry,
+          hasPool:     rooms.hasPool,
+          hasPatio:    rooms.hasPatio,
+          hasBalcony:  rooms.hasBalcony,
+          hasBasement: rooms.hasBasement,
+          hasGym:      rooms.hasGym,
+          cleaningType,
+          frequency,
+          price:       Math.round(finalPrice),
+          scheduledAt: selectedSlot.startUtc,
+          teamId:      selectedSlot.teamId,
+        }),
+      })
+      if (!res.ok) throw new Error('Erro ao agendar')
+      setDone(true)
+    } catch {
+      alert('Erro ao enviar. Tente novamente.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const primaryColor = config?.branding.primaryColor ?? '#0d9488'
-  const step1Done = rooms.bedrooms >= 1 && rooms.bathrooms >= 1
-  const step3Valid = name.trim().length >= 2 && email.includes('@') && phone.length >= 10
+  const step1Done    = rooms.bedrooms >= 1 && rooms.bathrooms >= 1
+  const step3Done    = !!selectedSlot
+  const step4Valid   = name.trim().length >= 2 && email.includes('@') && phone.length >= 10
 
-  // ── Labels (bilingual) ──────────────────────────────────────────────────
+  // ── Labels ──────────────────────────────────────────────────────────────
   const L = locale === 'pt' ? {
-    getQuote:    'Calcule seu preço',
-    subtitle:    'Sem surpresas. Veja o preço exato agora.',
-    step1:       'Detalhes da residência',
-    step2:       'Frequência do serviço',
-    step3:       'Seus dados',
-    bedrooms:    'Quartos',
-    bathrooms:   'Banheiros',
+    getQuote: 'Calcule seu preço',
+    subtitle: 'Sem surpresas. Veja o preço exato agora.',
+    step1: 'Detalhes da residência',
+    step2: 'Frequência do serviço',
+    step3: 'Data e horário',
+    step4: 'Seus dados',
+    bedrooms: 'Quartos',
+    bathrooms: 'Banheiros',
     livingRooms: 'Salas de estar',
-    kitchens:    'Cozinhas',
-    offices:     'Escritórios',
-    garages:     'Vagas de garagem',
-    extras:      'Áreas adicionais',
-    laundry:     'Lavanderia',
-    pool:        'Área da piscina',
-    patio:       'Pátio / área externa',
-    balcony:     'Varanda',
-    basement:    'Porão',
-    gym:         'Academia',
-    standard:    'Limpeza padrão',
-    deep:        'Limpeza profunda',
-    deepDesc:    '+35% · Ideal para primeira vez ou muito sujo',
-    once:        'Única vez',
-    weekly:      'Semanal',
-    biweekly:    'Quinzenal',
-    monthly:     'Mensal',
-    discount:    'de desconto',
-    yourPrice:   'Seu preço estimado',
+    kitchens: 'Cozinhas',
+    offices: 'Escritórios',
+    garages: 'Vagas de garagem',
+    extras: 'Áreas adicionais',
+    laundry: 'Lavanderia',
+    pool: 'Área da piscina',
+    patio: 'Pátio / área externa',
+    balcony: 'Varanda',
+    basement: 'Porão',
+    gym: 'Academia',
+    standard: 'Limpeza padrão',
+    deep: 'Limpeza profunda',
+    deepDesc: '+35% · Ideal para primeira vez ou muito sujo',
+    once: 'Única vez',
+    weekly: 'Semanal',
+    biweekly: 'Quinzenal',
+    monthly: 'Mensal',
+    discount: 'de desconto',
+    yourPrice: 'Seu preço estimado',
     perCleaning: 'por limpeza',
-    youSave:     'Você economiza',
-    namePH:      'Seu nome completo',
-    emailPH:     'seu@email.com',
-    phonePH:     '(239) 000-0000',
-    next:        'Continuar',
-    back:        'Voltar',
-    cta:         'Criar conta e agendar',
-    trust1:      'Pagamento seguro via Stripe',
-    trust2:      'Sem contratos',
-    trust3:      'Garantia de satisfação',
-    showExtras:  'Mostrar áreas adicionais',
-    hideExtras:  'Ocultar áreas adicionais',
+    youSave: 'Você economiza',
+    namePH: 'Seu nome completo',
+    emailPH: 'seu@email.com',
+    phonePH: '(239) 000-0000',
+    back: 'Voltar',
+    next: 'Continuar',
+    cta: 'Confirmar agendamento',
+    trust1: 'Sem cartão agora',
+    trust2: 'Cancelamento grátis',
+    trust3: 'Profissionais verificados',
+    selectDate: 'Selecione uma data',
+    selectTime: 'Selecione um horário',
+    noSlots: 'Sem horários disponíveis neste dia. Tente outra data.',
+    loadingSlots: 'Buscando horários...',
+    confirmTitle: 'Agendamento confirmado! 🎉',
+    confirmMsg: 'Entraremos em contato em breve para confirmar os detalhes.',
   } : locale === 'es' ? {
-    getQuote:    'Calcule su precio',
-    subtitle:    'Sin sorpresas. Vea el precio exacto ahora.',
-    step1:       'Detalles del hogar',
-    step2:       'Frecuencia del servicio',
-    step3:       'Sus datos',
-    bedrooms:    'Habitaciones',
-    bathrooms:   'Baños',
-    livingRooms: 'Salas de estar',
-    kitchens:    'Cocinas',
-    offices:     'Oficinas',
-    garages:     'Garajes',
-    extras:      'Áreas adicionales',
-    laundry:     'Lavandería',
-    pool:        'Área de piscina',
-    patio:       'Patio / área exterior',
-    balcony:     'Balcón',
-    basement:    'Sótano',
-    gym:         'Gimnasio',
-    standard:    'Limpieza estándar',
-    deep:        'Limpieza profunda',
-    deepDesc:    '+35% · Ideal para primera vez o muy sucio',
-    once:        'Una sola vez',
-    weekly:      'Semanal',
-    biweekly:    'Quincenal',
-    monthly:     'Mensual',
-    discount:    'de descuento',
-    yourPrice:   'Su precio estimado',
+    getQuote: 'Calcule su precio',
+    subtitle: 'Sin sorpresas. Vea el precio exacto ahora.',
+    step1: 'Detalles del hogar',
+    step2: 'Frecuencia del servicio',
+    step3: 'Fecha y horario',
+    step4: 'Sus datos',
+    bedrooms: 'Habitaciones',
+    bathrooms: 'Baños',
+    livingRooms: 'Salas',
+    kitchens: 'Cocinas',
+    offices: 'Oficinas',
+    garages: 'Garajes',
+    extras: 'Áreas adicionales',
+    laundry: 'Lavandería',
+    pool: 'Área de piscina',
+    patio: 'Patio / área exterior',
+    balcony: 'Balcón',
+    basement: 'Sótano',
+    gym: 'Gimnasio',
+    standard: 'Limpieza estándar',
+    deep: 'Limpieza profunda',
+    deepDesc: '+35% · Ideal para primera vez o muy sucio',
+    once: 'Una vez',
+    weekly: 'Semanal',
+    biweekly: 'Quincenal',
+    monthly: 'Mensual',
+    discount: 'de descuento',
+    yourPrice: 'Su precio estimado',
     perCleaning: 'por limpieza',
-    youSave:     'Ahorra',
-    namePH:      'Su nombre completo',
-    emailPH:     'su@email.com',
-    phonePH:     '(239) 000-0000',
-    next:        'Continuar',
-    back:        'Volver',
-    cta:         'Crear cuenta y agendar',
-    trust1:      'Pago seguro con Stripe',
-    trust2:      'Sin contratos',
-    trust3:      'Garantía de satisfacción',
-    showExtras:  'Mostrar áreas adicionales',
-    hideExtras:  'Ocultar áreas adicionales',
+    youSave: 'Ahorra',
+    namePH: 'Su nombre completo',
+    emailPH: 'su@email.com',
+    phonePH: '(239) 000-0000',
+    back: 'Volver',
+    next: 'Continuar',
+    cta: 'Confirmar cita',
+    trust1: 'Sin tarjeta ahora',
+    trust2: 'Cancelación gratis',
+    trust3: 'Profesionales verificados',
+    selectDate: 'Seleccione una fecha',
+    selectTime: 'Seleccione un horario',
+    noSlots: 'Sin horarios disponibles este día. Pruebe otra fecha.',
+    loadingSlots: 'Buscando horarios...',
+    confirmTitle: '¡Cita confirmada! 🎉',
+    confirmMsg: 'Nos pondremos en contacto pronto para confirmar los detalles.',
   } : {
-    getQuote:    'Get your instant quote',
-    subtitle:    'No surprises. See the exact price right now.',
-    step1:       'Home details',
-    step2:       'Service frequency',
-    step3:       'Your information',
-    bedrooms:    'Bedrooms',
-    bathrooms:   'Bathrooms',
+    getQuote: 'Get your price',
+    subtitle: 'No surprises. See the exact price now.',
+    step1: 'Home details',
+    step2: 'Service frequency',
+    step3: 'Date & time',
+    step4: 'Your info',
+    bedrooms: 'Bedrooms',
+    bathrooms: 'Bathrooms',
     livingRooms: 'Living rooms',
-    kitchens:    'Kitchens',
-    offices:     'Home offices',
-    garages:     'Garage bays',
-    extras:      'Additional areas',
-    laundry:     'Laundry room',
-    pool:        'Pool area',
-    patio:       'Patio / outdoor area',
-    balcony:     'Balcony',
-    basement:    'Basement',
-    gym:         'Home gym',
-    standard:    'Standard cleaning',
-    deep:        'Deep cleaning',
-    deepDesc:    '+35% · Best for first-time or heavily soiled',
-    once:        'One-time',
-    weekly:      'Weekly',
-    biweekly:    'Bi-weekly',
-    monthly:     'Monthly',
-    discount:    'off',
-    yourPrice:   'Your estimated price',
+    kitchens: 'Kitchens',
+    offices: 'Offices',
+    garages: 'Garages',
+    extras: 'Extra areas',
+    laundry: 'Laundry room',
+    pool: 'Pool area',
+    patio: 'Patio / outdoor',
+    balcony: 'Balcony',
+    basement: 'Basement',
+    gym: 'Gym',
+    standard: 'Standard cleaning',
+    deep: 'Deep cleaning',
+    deepDesc: '+35% · Great for first time or heavily soiled',
+    once: 'One time',
+    weekly: 'Weekly',
+    biweekly: 'Bi-weekly',
+    monthly: 'Monthly',
+    discount: 'off',
+    yourPrice: 'Your price',
     perCleaning: 'per cleaning',
-    youSave:     'You save',
-    namePH:      'Your full name',
-    emailPH:     'you@email.com',
-    phonePH:     '(239) 000-0000',
-    next:        'Continue',
-    back:        'Back',
-    cta:         'Create account & book',
-    trust1:      'Secure payment via Stripe',
-    trust2:      'No contracts',
-    trust3:      'Satisfaction guaranteed',
-    showExtras:  'Show additional areas',
-    hideExtras:  'Hide additional areas',
+    youSave: 'You save',
+    namePH: 'Your full name',
+    emailPH: 'your@email.com',
+    phonePH: '(239) 000-0000',
+    back: 'Back',
+    next: 'Continue',
+    cta: 'Confirm booking',
+    trust1: 'No card now',
+    trust2: 'Free cancellation',
+    trust3: 'Verified professionals',
+    selectDate: 'Select a date',
+    selectTime: 'Select a time',
+    noSlots: 'No availability on this day. Try another date.',
+    loadingSlots: 'Checking availability...',
+    confirmTitle: 'Booking confirmed! 🎉',
+    confirmMsg: "We'll be in touch shortly to confirm the details.",
   }
 
-  // ── Loading / error states ──────────────────────────────────────────────
   if (loadError) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -341,6 +425,43 @@ export default function PublicBookPage() {
       </div>
     )
   }
+
+  // ── SUCCESS screen ──────────────────────────────────────────────────────
+  if (done) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
+        <div className="max-w-md w-full bg-white rounded-3xl border border-slate-100 shadow-xl p-10 text-center">
+          <div
+            className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6"
+            style={{ backgroundColor: primaryColor + '20' }}
+          >
+            <CheckCircle2 className="w-10 h-10" style={{ color: primaryColor }} />
+          </div>
+          <h1 className="text-2xl font-extrabold text-slate-900 mb-3">{L.confirmTitle}</h1>
+          <p className="text-slate-500 mb-2">{L.confirmMsg}</p>
+          {selectedSlot && (
+            <p className="text-sm font-semibold text-slate-700 bg-slate-50 rounded-xl px-4 py-3 mt-4">
+              📅 {fmtDayLabel(selectedDate)} · {selectedSlot.time}
+            </p>
+          )}
+          <div className="mt-6 pt-6 border-t border-slate-100 space-y-2">
+            <p className="text-2xl font-extrabold" style={{ color: primaryColor }}>{fmtUSD(finalPrice)}</p>
+            <p className="text-xs text-slate-400">{rooms.bedrooms} bed · {rooms.bathrooms} bath · {cleaningType === 'deep' ? 'Deep clean' : 'Standard'}</p>
+          </div>
+          <Button
+            className="w-full mt-6 h-12 rounded-xl font-bold"
+            style={{ backgroundColor: primaryColor }}
+            onClick={() => router.push(`/t/${tenantSlug}`)}
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" /> Back to home
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  const STEPS: Step[] = [1, 2, 3, 4]
+  const STEP_LABELS = [L.step1, L.step2, L.step3, L.step4]
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -364,33 +485,28 @@ export default function PublicBookPage() {
       </nav>
 
       {/* ── Price sticky bar ──────────────────────────────────── */}
-      {config && (
-        <div
-          className="sticky top-14 z-30 border-b"
-          style={{ backgroundColor: primaryColor }}
-        >
-          <div className="max-w-xl mx-auto px-4 h-12 flex items-center justify-between">
-            <span className="text-white/80 text-sm font-medium">{L.yourPrice}</span>
-            <div className="flex items-center gap-3">
-              {discountPct > 0 && (
-                <span className="text-white/60 line-through text-sm">{fmtUSD(priceAfterType)}</span>
-              )}
-              <span className="text-white font-extrabold text-xl">{fmtUSD(finalPrice)}</span>
-              {discountPct > 0 && (
-                <span className="bg-white/20 text-white text-xs font-bold rounded-full px-2 py-0.5">
-                  -{discountPct}% {L.discount}
-                </span>
-              )}
-            </div>
+      <div className="sticky top-14 z-30 border-b" style={{ backgroundColor: primaryColor }}>
+        <div className="max-w-xl mx-auto px-4 h-12 flex items-center justify-between">
+          <span className="text-white/80 text-sm font-medium">{L.yourPrice}</span>
+          <div className="flex items-center gap-3">
+            {discountPct > 0 && (
+              <span className="text-white/60 line-through text-sm">{fmtUSD(priceAfterType)}</span>
+            )}
+            <span className="text-white font-extrabold text-xl">{fmtUSD(finalPrice)}</span>
+            {discountPct > 0 && (
+              <span className="bg-white/20 text-white text-xs font-bold rounded-full px-2 py-0.5">
+                -{discountPct}% {L.discount}
+              </span>
+            )}
           </div>
         </div>
-      )}
+      </div>
 
       {/* ── Step indicators ────────────────────────────────────── */}
       <div className="max-w-xl mx-auto px-4 pt-6 pb-2">
-        <div className="flex items-center gap-2">
-          {([1, 2, 3] as const).map((s, i) => (
-            <div key={s} className="flex items-center gap-2 flex-1">
+        <div className="flex items-center gap-1">
+          {STEPS.map((s, i) => (
+            <div key={s} className="flex items-center gap-1 flex-1">
               <div
                 className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
                 style={
@@ -401,7 +517,7 @@ export default function PublicBookPage() {
               >
                 {step > s ? <Check className="w-3.5 h-3.5" /> : s}
               </div>
-              {i < 2 && (
+              {i < 3 && (
                 <div
                   className="flex-1 h-0.5 rounded"
                   style={{ backgroundColor: step > s ? primaryColor : '#e2e8f0' }}
@@ -410,10 +526,8 @@ export default function PublicBookPage() {
             </div>
           ))}
         </div>
-        <div className="flex justify-between mt-2 text-[11px] font-medium text-slate-400">
-          <span>{L.step1}</span>
-          <span>{L.step2}</span>
-          <span>{L.step3}</span>
+        <div className="flex justify-between mt-2 text-[10px] font-medium text-slate-400">
+          {STEP_LABELS.map((l, i) => <span key={i}>{l}</span>)}
         </div>
       </div>
 
@@ -428,80 +542,72 @@ export default function PublicBookPage() {
               <p className="text-sm text-slate-500 mt-0.5">{L.subtitle}</p>
             </div>
 
-            {/* Cleaning type */}
-            <div className="grid grid-cols-2 gap-3">
-              {(['standard', 'deep'] as CleaningType[]).map(type => (
+            {/* Cleaning type toggle */}
+            <div className="grid grid-cols-2 gap-2">
+              {(['standard', 'deep'] as CleaningType[]).map(t => (
                 <button
-                  key={type}
-                  onClick={() => setCleaningType(type)}
-                  className={`rounded-xl border-2 p-4 text-left transition-all ${
-                    cleaningType === type
-                      ? 'border-current shadow-sm'
-                      : 'border-slate-200 hover:border-slate-300'
+                  key={t}
+                  onClick={() => setCleaningType(t)}
+                  className={`p-3.5 rounded-xl border-2 text-left transition-all ${
+                    cleaningType === t ? 'border-current bg-white shadow-sm' : 'border-slate-100 bg-slate-50'
                   }`}
-                  style={cleaningType === type ? { borderColor: primaryColor, backgroundColor: `${primaryColor}08` } : {}}
+                  style={cleaningType === t ? { borderColor: primaryColor } : {}}
                 >
                   <div className="flex items-center gap-2 mb-1">
-                    {type === 'standard' ? <Home className="w-4 h-4" style={cleaningType === type ? { color: primaryColor } : { color: '#94a3b8' }} /> : <Sparkles className="w-4 h-4" style={cleaningType === type ? { color: primaryColor } : { color: '#94a3b8' }} />}
-                    <span className="text-sm font-bold text-slate-800">{type === 'standard' ? L.standard : L.deep}</span>
+                    {t === 'standard' ? <Sparkles className="w-4 h-4" style={{ color: primaryColor }} />
+                                      : <Zap className="w-4 h-4" style={{ color: primaryColor }} />}
+                    <span className="text-sm font-bold text-slate-800">{t === 'standard' ? L.standard : L.deep}</span>
                   </div>
-                  {type === 'deep' && (
-                    <p className="text-[11px] text-slate-500 leading-snug">{L.deepDesc}</p>
-                  )}
+                  {t === 'deep' && <p className="text-xs text-slate-400">{L.deepDesc}</p>}
                 </button>
               ))}
             </div>
 
-            {/* Key rooms */}
+            {/* Main counters */}
             <div className="space-y-2">
-              <Counter value={rooms.bedrooms}    min={1} max={10} onChange={setRoom('bedrooms')}    label={L.bedrooms}    icon={<BedDouble className="w-4 h-4" />} />
-              <Counter value={rooms.bathrooms}   min={1} max={10} onChange={setRoom('bathrooms')}   label={L.bathrooms}   icon={<Bath       className="w-4 h-4" />} />
-              <Counter value={rooms.livingRooms} min={0} max={5}  onChange={setRoom('livingRooms')} label={L.livingRooms} icon={<Home       className="w-4 h-4" />} />
-              <Counter value={rooms.kitchens}    min={1} max={4}  onChange={setRoom('kitchens')}    label={L.kitchens}    icon={<Zap        className="w-4 h-4" />} />
+              <Counter value={rooms.bedrooms}    min={1} onChange={v => setRoom('bedrooms')(v)}    label={L.bedrooms}    icon={<BedDouble className="w-4 h-4" />} />
+              <Counter value={rooms.bathrooms}   min={1} onChange={v => setRoom('bathrooms')(v)}   label={L.bathrooms}   icon={<Bath className="w-4 h-4" />} />
+              <Counter value={rooms.livingRooms} min={0} onChange={v => setRoom('livingRooms')(v)} label={L.livingRooms} icon={<Home className="w-4 h-4" />} />
+              <Counter value={rooms.kitchens}    min={0} onChange={v => setRoom('kitchens')(v)}    label={L.kitchens}    icon={<Home className="w-4 h-4" />} />
             </div>
 
             {/* Extras toggle */}
             <button
               onClick={() => setShowExtras(v => !v)}
-              className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-800 transition-colors font-medium"
+              className="flex items-center gap-2 text-sm font-semibold w-full py-2 text-slate-500 hover:text-slate-800"
             >
               {showExtras ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-              {showExtras ? L.hideExtras : L.showExtras}
+              {L.extras}
             </button>
 
             {showExtras && (
               <div className="space-y-2">
-                <Counter value={rooms.offices}  min={0} max={5}  onChange={setRoom('offices')}  label={L.offices}  icon={<Home className="w-4 h-4" />} />
-                <Counter value={rooms.garages}  min={0} max={4}  onChange={setRoom('garages')}  label={L.garages}  icon={<Home className="w-4 h-4" />} />
-
-                {/* Toggle extras */}
+                <Counter value={rooms.offices} min={0} onChange={v => setRoom('offices')(v)} label={L.offices} icon={<Home className="w-4 h-4" />} />
+                <Counter value={rooms.garages} min={0} onChange={v => setRoom('garages')(v)} label={L.garages} icon={<Home className="w-4 h-4" />} />
                 {([
-                  ['hasLaundry',  L.laundry],
-                  ['hasPool',     L.pool],
-                  ['hasPatio',    L.patio],
-                  ['hasBalcony',  L.balcony],
-                  ['hasBasement', L.basement],
-                  ['hasGym',      L.gym],
-                ] as [keyof RoomsState, string][]).map(([key, label]) => (
-                  <button
-                    key={key}
-                    onClick={() => setRoom(key)(!rooms[key])}
-                    className={`w-full flex items-center justify-between py-3 px-4 rounded-xl border-2 transition-all text-sm font-semibold ${
-                      rooms[key]
-                        ? 'text-white'
-                        : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300'
-                    }`}
-                    style={rooms[key] ? { backgroundColor: primaryColor, borderColor: primaryColor } : {}}
-                  >
-                    {label}
-                    {rooms[key] && <Check className="w-4 h-4" />}
-                  </button>
+                  { key: 'hasLaundry', label: L.laundry },
+                  { key: 'hasPool',    label: L.pool },
+                  { key: 'hasPatio',   label: L.patio },
+                  { key: 'hasBalcony', label: L.balcony },
+                  { key: 'hasBasement', label: L.basement },
+                  { key: 'hasGym',     label: L.gym },
+                ] as { key: keyof RoomsState; label: string }[]).map(({ key, label }) => (
+                  <div key={key} className="flex items-center justify-between py-3 px-4 bg-slate-50 rounded-xl border border-slate-100">
+                    <span className="text-sm font-semibold text-slate-700">{label}</span>
+                    <button
+                      onClick={() => setRoom(key)(!(rooms[key] as boolean))}
+                      className={`w-12 h-6 rounded-full transition-colors relative ${rooms[key] ? 'bg-teal-500' : 'bg-slate-200'}`}
+                      style={rooms[key] ? { backgroundColor: primaryColor } : {}}
+                    >
+                      <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${rooms[key] ? 'left-7' : 'left-1'}`} />
+                    </button>
+                  </div>
                 ))}
               </div>
             )}
 
             <Button
-              className="w-full h-12 text-white font-bold rounded-xl text-base"
+              className="w-full h-12 rounded-xl font-bold text-white"
               style={{ backgroundColor: primaryColor }}
               onClick={() => setStep(2)}
               disabled={!step1Done}
@@ -516,76 +622,42 @@ export default function PublicBookPage() {
           <div className="space-y-4">
             <div>
               <h2 className="text-xl font-extrabold text-slate-900">{L.step2}</h2>
-              <p className="text-sm text-slate-500 mt-0.5">
-                {locale === 'pt' ? 'Clientes recorrentes recebem desconto especial.' :
-                 locale === 'es' ? 'Los clientes recurrentes reciben descuento especial.' :
-                 'Recurring customers save more every time.'}
-              </p>
             </div>
-
             <div className="space-y-3">
               {([
-                { key: 'once',     label: L.once,     desc: locale === 'pt' ? 'Sem compromisso' : locale === 'es' ? 'Sin compromiso' : 'No commitment', discount: 0,    icon: <CalendarDays className="w-5 h-5" /> },
-                { key: 'weekly',   label: L.weekly,   desc: locale === 'pt' ? 'Toda semana'     : locale === 'es' ? 'Cada semana'    : 'Every week',      discount: config.recurringDiscounts.weekly,   icon: <RefreshCw className="w-5 h-5" /> },
-                { key: 'biweekly', label: L.biweekly, desc: locale === 'pt' ? 'A cada 2 semanas': locale === 'es' ? 'Cada 2 semanas' : 'Every 2 weeks',   discount: config.recurringDiscounts.biweekly, icon: <RefreshCw className="w-5 h-5" /> },
-                { key: 'monthly',  label: L.monthly,  desc: locale === 'pt' ? 'Uma vez por mês' : locale === 'es' ? 'Una vez al mes'  : 'Once a month',   discount: config.recurringDiscounts.monthly,  icon: <RefreshCw className="w-5 h-5" /> },
-              ] as { key: Frequency; label: string; desc: string; discount: number; icon: React.ReactNode }[]).map(opt => {
-                const discountedPrice = opt.discount > 0 ? applyDiscount(priceAfterType, opt.discount) : priceAfterType
-                const isSelected = frequency === opt.key
-                return (
-                  <button
-                    key={opt.key}
-                    onClick={() => setFrequency(opt.key)}
-                    className={`w-full flex items-center gap-4 rounded-xl border-2 p-4 text-left transition-all ${
-                      isSelected ? 'shadow-sm' : 'border-slate-200 hover:border-slate-300'
-                    }`}
-                    style={isSelected ? { borderColor: primaryColor, backgroundColor: `${primaryColor}08` } : {}}
-                  >
-                    <div
-                      className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-                      style={{ backgroundColor: isSelected ? primaryColor : '#f1f5f9', color: isSelected ? '#fff' : '#64748b' }}
-                    >
-                      {opt.icon}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-slate-900">{opt.label}</span>
-                        {opt.discount > 0 && (
-                          <span className="text-[11px] font-bold rounded-full px-2 py-0.5 text-white"
-                            style={{ backgroundColor: primaryColor }}>
-                            -{opt.discount}% {L.discount}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-slate-500 mt-0.5">{opt.desc}</p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="font-extrabold text-slate-900 text-lg">{fmtUSD(discountedPrice)}</p>
-                      <p className="text-xs text-slate-400">{L.perCleaning}</p>
-                    </div>
-                  </button>
-                )
-              })}
+                { value: 'once',     label: L.once,     icon: <CalendarDays className="w-5 h-5" />, pct: 0 },
+                { value: 'weekly',   label: L.weekly,   icon: <RefreshCw className="w-5 h-5" />,    pct: config.recurringDiscounts.weekly ?? 10 },
+                { value: 'biweekly', label: L.biweekly, icon: <RefreshCw className="w-5 h-5" />,    pct: config.recurringDiscounts.biweekly ?? 8 },
+                { value: 'monthly',  label: L.monthly,  icon: <RefreshCw className="w-5 h-5" />,    pct: config.recurringDiscounts.monthly ?? 5 },
+              ] as { value: Frequency; label: string; icon: React.ReactNode; pct: number }[]).map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setFrequency(opt.value)}
+                  className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left ${
+                    frequency === opt.value ? 'bg-white shadow-sm' : 'border-slate-100 bg-slate-50'
+                  }`}
+                  style={frequency === opt.value ? { borderColor: primaryColor } : {}}
+                >
+                  <span style={{ color: primaryColor }}>{opt.icon}</span>
+                  <div className="flex-1">
+                    <p className="font-bold text-slate-800">{opt.label}</p>
+                    {opt.pct > 0 && (
+                      <p className="text-xs text-green-600 font-semibold mt-0.5">
+                        {opt.pct}% {L.discount} · {fmtUSD(applyDiscount(priceAfterType, opt.pct))} {L.perCleaning}
+                      </p>
+                    )}
+                  </div>
+                  {frequency === opt.value && <Check className="w-5 h-5 shrink-0" style={{ color: primaryColor }} />}
+                </button>
+              ))}
             </div>
-
-            {discountPct > 0 && (
-              <div
-                className="rounded-xl p-4 text-white flex items-center gap-3"
-                style={{ backgroundColor: primaryColor }}
-              >
-                <Sparkles className="w-5 h-5 shrink-0" />
-                <p className="text-sm font-semibold">
-                  {L.youSave} <strong>{fmtUSD(savings)}</strong> {locale !== 'en' ? 'em comparação com a limpeza única' : 'compared to one-time cleaning'}.
-                </p>
-              </div>
-            )}
 
             <div className="flex gap-3">
               <Button variant="outline" className="flex-1 h-12 rounded-xl font-semibold" onClick={() => setStep(1)}>
                 <ArrowLeft className="w-4 h-4 mr-1" /> {L.back}
               </Button>
               <Button
-                className="flex-1 h-12 text-white font-bold rounded-xl"
+                className="flex-1 h-12 rounded-xl font-bold text-white"
                 style={{ backgroundColor: primaryColor }}
                 onClick={() => setStep(3)}
               >
@@ -595,31 +667,123 @@ export default function PublicBookPage() {
           </div>
         )}
 
-        {/* ── STEP 3: Contact ──────────────────────────────────── */}
+        {/* ── STEP 3: Date & Time ──────────────────────────────── */}
         {step === 3 && (
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-4">
             <div>
               <h2 className="text-xl font-extrabold text-slate-900">{L.step3}</h2>
+              <p className="text-sm text-slate-500 mt-0.5">{L.selectDate}</p>
+            </div>
+
+            {/* Date picker — horizontal scroll */}
+            <div className="overflow-x-auto pb-2 -mx-4 px-4">
+              <div className="flex gap-2" style={{ width: 'max-content' }}>
+                {selectableDays.map(d => {
+                  const date = new Date(d + 'T12:00:00')
+                  const dow  = date.toLocaleDateString('en-US', { weekday: 'short' })
+                  const day  = date.getDate()
+                  const mon  = date.toLocaleDateString('en-US', { month: 'short' })
+                  const sel  = d === selectedDate
+                  return (
+                    <button
+                      key={d}
+                      onClick={() => setSelectedDate(d)}
+                      className={`flex flex-col items-center w-14 py-3 rounded-2xl border-2 transition-all shrink-0 ${
+                        sel ? 'border-current text-white shadow-md' : 'border-slate-100 bg-white text-slate-600 hover:border-slate-300'
+                      }`}
+                      style={sel ? { backgroundColor: primaryColor, borderColor: primaryColor } : {}}
+                    >
+                      <span className={`text-[10px] font-semibold uppercase ${sel ? 'text-white/70' : 'text-slate-400'}`}>{dow}</span>
+                      <span className={`text-lg font-extrabold leading-none mt-1 ${sel ? 'text-white' : 'text-slate-900'}`}>{day}</span>
+                      <span className={`text-[10px] font-medium mt-0.5 ${sel ? 'text-white/70' : 'text-slate-400'}`}>{mon}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Time slots */}
+            {selectedDate && (
+              <div>
+                <p className="text-sm font-semibold text-slate-600 mb-2">{L.selectTime}</p>
+                {loadingSlots ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-5 h-5 animate-spin" style={{ color: primaryColor }} />
+                    <span className="ml-2 text-sm text-slate-500">{L.loadingSlots}</span>
+                  </div>
+                ) : slots.length === 0 ? (
+                  <div className="text-center py-8 text-slate-400 text-sm bg-white rounded-xl border border-slate-100">
+                    <CalendarDays className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                    {L.noSlots}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2">
+                    {slots.map(slot => {
+                      const sel = selectedSlot?.startUtc === slot.startUtc
+                      return (
+                        <button
+                          key={slot.startUtc}
+                          onClick={() => setSelectedSlot(slot)}
+                          className={`py-3 rounded-xl border-2 text-sm font-bold transition-all ${
+                            sel ? 'text-white border-current' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-400'
+                          }`}
+                          style={sel ? { backgroundColor: primaryColor, borderColor: primaryColor } : {}}
+                        >
+                          {slot.time}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <Button variant="outline" className="flex-1 h-12 rounded-xl font-semibold" onClick={() => setStep(2)}>
+                <ArrowLeft className="w-4 h-4 mr-1" /> {L.back}
+              </Button>
+              <Button
+                className="flex-1 h-12 rounded-xl font-bold text-white"
+                style={{ backgroundColor: primaryColor }}
+                onClick={() => setStep(4)}
+                disabled={!step3Done}
+              >
+                {L.next} <ArrowRight className="w-4 h-4 ml-1" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* ── STEP 4: Contact ──────────────────────────────────── */}
+        {step === 4 && (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <h2 className="text-xl font-extrabold text-slate-900">{L.step4}</h2>
               <p className="text-sm text-slate-500 mt-0.5">
-                {locale === 'pt' ? 'Crie sua conta para confirmar o agendamento.' :
-                 locale === 'es' ? 'Cree su cuenta para confirmar la cita.' :
-                 'Create your account to confirm the booking.'}
+                {locale === 'pt' ? 'Confirme seus dados para finalizar o agendamento.'
+                : locale === 'es' ? 'Confirme sus datos para finalizar la cita.'
+                : 'Confirm your details to complete the booking.'}
               </p>
             </div>
 
-            {/* Price summary card */}
+            {/* Booking summary */}
             <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2">
               <p className="text-xs text-slate-400 font-semibold uppercase tracking-wide">
                 {locale === 'pt' ? 'Resumo' : locale === 'es' ? 'Resumen' : 'Summary'}
               </p>
               <div className="flex items-baseline justify-between">
-                <span className="text-slate-700 font-medium">
-                  {rooms.bedrooms} {L.bedrooms.toLowerCase()} · {rooms.bathrooms} {L.bathrooms.toLowerCase()}
-                  {cleaningType === 'deep' ? ` · ${L.deep}` : ''}
-                  {frequency !== 'once' ? ` · ${frequency === 'weekly' ? L.weekly : frequency === 'biweekly' ? L.biweekly : L.monthly}` : ''}
+                <span className="text-slate-700 font-medium text-sm">
+                  {rooms.bedrooms} bed · {rooms.bathrooms} bath
+                  {cleaningType === 'deep' ? ' · Deep' : ''}
+                  {frequency !== 'once' ? ` · ${frequency}` : ''}
                 </span>
                 <span className="font-extrabold text-2xl text-slate-900">{fmtUSD(finalPrice)}</span>
               </div>
+              {selectedSlot && (
+                <p className="text-sm font-semibold text-teal-600">
+                  📅 {fmtDayLabel(selectedDate)} · {selectedSlot.time}
+                </p>
+              )}
               {discountPct > 0 && (
                 <p className="text-sm text-green-600 font-semibold">✓ {L.youSave} {fmtUSD(savings)} ({discountPct}% {L.discount})</p>
               )}
@@ -635,18 +799,17 @@ export default function PublicBookPage() {
                 <Input
                   id="name" value={name} onChange={e => setName(e.target.value)}
                   placeholder={L.namePH} required
-                  className="h-11 rounded-xl border-slate-200 focus:border-teal-400 focus:ring-teal-400"
+                  className="h-11 rounded-xl border-slate-200"
                 />
               </div>
               <div>
                 <Label htmlFor="email" className="text-sm font-semibold text-slate-700 flex items-center gap-1.5 mb-1.5">
-                  <Mail className="w-3.5 h-3.5" />
-                  Email
+                  <Mail className="w-3.5 h-3.5" />Email
                 </Label>
                 <Input
                   id="email" type="email" value={email} onChange={e => setEmail(e.target.value)}
                   placeholder={L.emailPH} required
-                  className="h-11 rounded-xl border-slate-200 focus:border-teal-400 focus:ring-teal-400"
+                  className="h-11 rounded-xl border-slate-200"
                 />
               </div>
               <div>
@@ -657,24 +820,25 @@ export default function PublicBookPage() {
                 <Input
                   id="phone" type="tel" value={phone} onChange={e => setPhone(e.target.value)}
                   placeholder={L.phonePH} required
-                  className="h-11 rounded-xl border-slate-200 focus:border-teal-400 focus:ring-teal-400"
+                  className="h-11 rounded-xl border-slate-200"
                 />
               </div>
             </div>
 
             <div className="flex gap-3">
-              <Button type="button" variant="outline" className="flex-1 h-12 rounded-xl font-semibold" onClick={() => setStep(2)}>
+              <Button type="button" variant="outline" className="flex-1 h-12 rounded-xl font-semibold" onClick={() => setStep(3)}>
                 <ArrowLeft className="w-4 h-4 mr-1" /> {L.back}
               </Button>
               <Button
                 type="submit"
-                disabled={!step3Valid || submitting}
+                disabled={!step4Valid || submitting}
                 className="flex-1 h-12 text-white font-bold rounded-xl text-sm"
                 style={{ backgroundColor: primaryColor }}
               >
-                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : (
-                  <>{L.cta} <ArrowRight className="w-4 h-4 ml-1" /></>
-                )}
+                {submitting
+                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                  : <>{L.cta} <ArrowRight className="w-4 h-4 ml-1" /></>
+                }
               </Button>
             </div>
 
