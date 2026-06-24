@@ -67,8 +67,9 @@ function RegisterForm() {
         return
       }
 
-      router.push('/dashboard')
-      router.refresh()
+      // Aguarda cookie ser gravado e usa rota server-side para redirect correto
+      await new Promise((r) => setTimeout(r, 600))
+      window.location.href = '/api/auth/redirect'
     } catch {
       toast.error('Erro de conexão. Verifique sua internet e tente novamente.')
     } finally {

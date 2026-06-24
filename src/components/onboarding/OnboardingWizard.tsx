@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { useRouter } from 'next/navigation'
 import { signIn } from 'next-auth/react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -97,7 +96,6 @@ function ErrorText({ msg }: { msg?: string }) {
 // ─── Wizard ───────────────────────────────────────────────────────────────────
 
 export function OnboardingWizard() {
-  const router = useRouter()
   const [step, setStep] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [slugStatus, setSlugStatus] = useState<'idle' | 'checking' | 'ok' | 'taken'>('idle')
@@ -242,9 +240,9 @@ export function OnboardingWizard() {
       })
 
       if (result?.ok) {
-        // Redireciona direto para o painel admin da empresa
-        router.push(`/t/${form.slug}/admin`)
-        router.refresh()
+        // Aguarda cookie ser gravado e redireciona via servidor
+        await new Promise((r) => setTimeout(r, 600))
+        window.location.href = `/t/${form.slug}/admin`
         return
       }
 
